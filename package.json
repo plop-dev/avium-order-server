@@ -19,6 +19,7 @@
 	},
 	"homepage": "https://github.com/plop-dev/avium-order-server#readme",
 	"dependencies": {
+		"archiver": "^7.0.1",
 		"cors": "^2.8.5",
 		"dotenv": "^17.2.1",
 		"express": "^5.1.0",
@@ -26,6 +27,7 @@
 	},
 	"devDependencies": {
 		"@tsconfig/node22": "^22.0.2",
+		"@types/archiver": "^6.0.3",
 		"@types/cors": "^2.8.19",
 		"@types/express": "^5.0.3",
 		"@types/multer": "^2.0.0",

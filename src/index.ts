@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import path, { dirname } from 'path';
+import profiles from './profiles/route.ts';
+import slicing from './slicing/route.ts';
 
 import multer from 'multer';
 import fs from 'fs';
@@ -39,6 +41,9 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 
+app.use('/profiles', profiles);
+app.use('/slice', slicing);
+
 const makeSignedUrl = (filename: string) => {
 	const secret = process.env.DOWNLOAD_SECRET;
 	if (!secret) throw new Error('DOWNLOAD_SECRET is required');
@@ -47,18 +52,18 @@ const makeSignedUrl = (filename: string) => {
 	return `${base}/file/${encodeURIComponent(filename)}?s=${sig}`;
 };
 
-const storage = multer.diskStorage({
-	destination: (req, file, cb) => cb(null, uploadDir),
-	filename: (req, file, cb) => {
-		const ts = Date.now();
-		const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-		cb(null, `${ts}-${safe}`);
-	},
-});
-const uploader = multer({
-	storage,
-	limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
-});
+// const storage = multer.diskStorage({
+// 	destination: (req, file, cb) => cb(null, uploadDir),
+// 	filename: (req, file, cb) => {
+// 		const ts = Date.now();
+// 		const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+// 		cb(null, `${ts}-${safe}`);
+// 	},
+// });
+// const uploader = multer({
+// 	storage,
+// 	limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+// });
 
 app.get('/', (req, res) => {
 	res.sendStatus(200);
