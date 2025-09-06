@@ -41,7 +41,23 @@ export async function sliceModel(file: Buffer, filename: string, settings: Slici
 	}
 
 	if (settings.printer && settings.preset) {
-		const settingsArg = `${basePath}/printers/${settings.printer}.json;${basePath}/presets/${settings.preset}.json`;
+		const uploadedPresetPath = `${basePath}/presets/${settings.preset}.json`;
+		const defaultPresetPath = `${process.env.PROCESS_PROFILES_FOLDER}/${settings.preset}.json`;
+
+		let presetPath: string;
+		try {
+			await fs.access(uploadedPresetPath);
+			presetPath = uploadedPresetPath;
+		} catch {
+			try {
+				await fs.access(defaultPresetPath);
+				presetPath = defaultPresetPath;
+			} catch {
+				throw new AppError(400, 'Preset not found', `Preset ${settings.preset} not found for printer ${settings.printer}`);
+			}
+		}
+
+		const settingsArg = `${basePath}/printers/${settings.printer}.json;${presetPath}`;
 		args.push('--load-settings', settingsArg);
 	}
 

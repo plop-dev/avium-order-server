@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import type { Category } from '../slicing/models';
+import type { Category } from '../slicing/models.ts';
 import { AppError } from '../middleware/error.js';
 import path from 'path';
 
