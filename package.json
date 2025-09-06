@@ -4,7 +4,7 @@
 	"description": "Server for Avium order storage",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"dev": "pnpm dlx tsx --watch src/index.ts --noEmit"
+		"dev": "nodemon --watch src --ext ts --exec \"pnpm dlx tsx src/index.ts --noEmit\""
 	},
 	"repository": {
 		"type": "git",
@@ -32,6 +32,8 @@
 		"@types/express": "^5.0.3",
 		"@types/multer": "^2.0.0",
 		"@types/node": "^24.3.0",
+		"nodemon": "^3.1.10",
+		"ts-node-dev": "^2.0.0",
 		"tsx": "^4.20.4",
 		"typescript": "^5.9.2"
 	}

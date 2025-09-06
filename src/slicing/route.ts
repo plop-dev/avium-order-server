@@ -57,6 +57,8 @@ router.post('/', uploadModel.single('file'), async (req, res) => {
 
 			const metaHeader = Buffer.from(JSON.stringify({ times, filament })).toString('base64');
 			res.setHeader('X-Slice-Metadata', metaHeader);
+			res.setHeader('Access-Control-Request-Headers', 'X-Slice-Metadata');
+			res.setHeader('Access-Control-Expose-Headers', 'X-Slice-Metadata');
 
 			res.download(gcodes[0]);
 		} finally {

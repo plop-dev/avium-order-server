@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import path, { dirname } from 'path';
 import profiles from './profiles/route.ts';
 import slicing from './slicing/route.ts';
+import generate from './generate/route.ts';
 
 import multer from 'multer';
 import fs from 'fs';
@@ -36,13 +37,14 @@ const uploadSessions = new Map<
 app.use(
 	cors({
 		origin: process.env.ENV === 'development' ? `http://localhost:3000` : process.env.PUBLIC_FRONTEND_URL,
-		methods: ['GET', 'POST', 'OPTIONS', 'PUT'],
+		methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
 	}),
 );
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/profiles', profiles);
 app.use('/slice', slicing);
+app.use('/generate', generate);
 
 const makeSignedUrl = (filename: string) => {
 	const secret = process.env.DOWNLOAD_SECRET;

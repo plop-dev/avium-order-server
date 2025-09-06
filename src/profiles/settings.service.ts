@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import type { Category } from '../slicing/models';
 import { AppError } from '../middleware/error.js';
+import path from 'path';
 
 const BASE = process.env.DATA_PATH || join(process.cwd(), 'data');
 
@@ -56,5 +57,21 @@ export async function getSetting(category: Category, name: string): Promise<obje
 		return JSON.parse(raw);
 	} catch (error) {
 		throw new AppError(500, `Failed to read setting`, error instanceof Error ? error.message : String(error));
+	}
+}
+
+export async function deleteSetting(category: Category, name: string): Promise<void> {
+	const dataDir = path.resolve(process.cwd(), 'data', category);
+	const filePath = path.join(dataDir, `${name}.json`);
+
+	try {
+		await fs.access(filePath);
+		await fs.unlink(filePath);
+		console.debug(`[deleteSetting] Successfully deleted ${category}/${name}`);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+			throw new AppError(404, `${category.slice(0, -1)} profile '${name}' not found`);
+		}
+		throw new AppError(500, `Failed to delete ${category.slice(0, -1)} profile`);
 	}
 }
