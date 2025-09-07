@@ -1,3 +1,5 @@
+import type { SlicingSettings } from './slicing/models.js';
+
 export type UploadChunk = {
 	id: string;
 	chunkIndex: number;
@@ -5,6 +7,7 @@ export type UploadChunk = {
 	totalChunks: number;
 	filetype: string;
 	data: string; // base64
+	settings?: SlicingSettings; // For slicing settings when used with slice upload
 };
 
 export type UploadedChunkResponse = {
@@ -13,11 +16,25 @@ export type UploadedChunkResponse = {
 	complete: boolean;
 };
 
-export type UploadedFileResponse = {
+export type FilamentInfo = {
+	used_mm?: string;
+	used_cm3?: string;
+	used_g?: string;
+	cost?: string;
+};
+
+export type SlicingResult = {
 	id: string;
-	filename: string;
-	size: number;
-	mimetype: string;
-	url: string;
+	modelFilename: string;
+	gcodeFilename: string;
+	modelSize: number;
+	gcodeSize: number;
+	modelUrl: string;
+	gcodeUrl: string;
 	complete: boolean;
+	times: {
+		model: string;
+		total: string;
+	};
+	filament: FilamentInfo;
 };

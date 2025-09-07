@@ -71,74 +71,74 @@ app.get('/', (req, res) => {
 	res.sendStatus(200);
 });
 
-app.post('/upload', express.json({ limit: '10mb' }), (req, res) => {
-	const chunk: UploadChunk = req.body;
-	if (!chunk) return res.status(400).json({ error: 'No chunk data' });
+// app.post('/upload', express.json({ limit: '10mb' }), (req, res) => {
+// 	const chunk: UploadChunk = req.body;
+// 	if (!chunk) return res.status(400).json({ error: 'No chunk data' });
 
-	console.log(`Received chunk ${chunk.currentChunk}/${chunk.totalChunks} for ID ${chunk.id}`);
+// 	console.log(`Received chunk ${chunk.currentChunk}/${chunk.totalChunks} for ID ${chunk.id}`);
 
-	if (!chunk.id || chunk.currentChunk < 0 || chunk.totalChunks <= 0) {
-		return res.status(400).json({ error: 'Invalid chunk data' });
-	}
+// 	if (!chunk.id || chunk.currentChunk < 0 || chunk.totalChunks <= 0) {
+// 		return res.status(400).json({ error: 'Invalid chunk data' });
+// 	}
 
-	// Initialize session if first chunk
-	if (!uploadSessions.has(chunk.id)) {
-		uploadSessions.set(chunk.id, {
-			chunks: new Map(),
-			totalChunks: chunk.totalChunks,
-			filetype: chunk.filetype,
-		});
-	}
+// 	// Initialize session if first chunk
+// 	if (!uploadSessions.has(chunk.id)) {
+// 		uploadSessions.set(chunk.id, {
+// 			chunks: new Map(),
+// 			totalChunks: chunk.totalChunks,
+// 			filetype: chunk.filetype,
+// 		});
+// 	}
 
-	const session = uploadSessions.get(chunk.id)!;
+// 	const session = uploadSessions.get(chunk.id)!;
 
-	// Store chunk data
-	const chunkBuffer = Buffer.from(chunk.data, 'base64');
-	session.chunks.set(chunk.currentChunk, chunkBuffer);
+// 	// Store chunk data
+// 	const chunkBuffer = Buffer.from(chunk.data, 'base64');
+// 	session.chunks.set(chunk.currentChunk, chunkBuffer);
 
-	// Check if all chunks received
-	if (session.chunks.size === session.totalChunks) {
-		console.log(`All chunks received for ID ${chunk.id}, assembling file...`);
-		console.log(
-			`Chunks: ${Array.from(session.chunks.keys())
-				.sort((a, b) => a - b)
-				.join(', ')}`,
-		);
+// 	// Check if all chunks received
+// 	if (session.chunks.size === session.totalChunks) {
+// 		console.log(`All chunks received for ID ${chunk.id}, assembling file...`);
+// 		console.log(
+// 			`Chunks: ${Array.from(session.chunks.keys())
+// 				.sort((a, b) => a - b)
+// 				.join(', ')}`,
+// 		);
 
-		try {
-			// Assemble file
-			const completeFile = Buffer.concat([...session.chunks.values()]);
+// 		try {
+// 			// Assemble file
+// 			const completeFile = Buffer.concat([...session.chunks.values()]);
 
-			// Save assembled file
-			const filename = `${Date.now()}-${chunk.id}.${chunk.filetype.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'}`;
-			const filePath = path.join(uploadDir, filename);
-			fs.writeFileSync(filePath, completeFile);
+// 			// Save assembled file
+// 			const filename = `${Date.now()}-${chunk.id}.${chunk.filetype.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'}`;
+// 			const filePath = path.join(uploadDir, filename);
+// 			fs.writeFileSync(filePath, completeFile);
 
-			// Clean up session
-			uploadSessions.delete(chunk.id);
+// 			// Clean up session
+// 			uploadSessions.delete(chunk.id);
 
-			console.log(`File assembled and saved as ${filename}`);
-			return res.json({
-				id: chunk.id,
-				filename,
-				size: completeFile.length,
-				filetype: session.filetype,
-				url: makeSignedUrl(filename),
-				complete: true,
-			});
-		} catch (error) {
-			uploadSessions.delete(chunk.id);
-			console.error('Error assembling file:', error);
-			return res.status(500).json({ error: 'Failed to assemble file' });
-		}
-	}
+// 			console.log(`File assembled and saved as ${filename}`);
+// 			return res.json({
+// 				id: chunk.id,
+// 				filename,
+// 				size: completeFile.length,
+// 				filetype: session.filetype,
+// 				url: makeSignedUrl(filename),
+// 				complete: true,
+// 			});
+// 		} catch (error) {
+// 			uploadSessions.delete(chunk.id);
+// 			console.error('Error assembling file:', error);
+// 			return res.status(500).json({ error: 'Failed to assemble file' });
+// 		}
+// 	}
 
-	res.json({
-		received: chunk.currentChunk + 1,
-		total: chunk.totalChunks,
-		complete: false,
-	});
-});
+// 	res.json({
+// 		received: chunk.currentChunk + 1,
+// 		total: chunk.totalChunks,
+// 		complete: false,
+// 	});
+// });
 
 // Protected file download (signed, permanent)
 app.get('/file/:filename', (req, res) => {
@@ -160,17 +160,6 @@ app.get('/file/:filename', (req, res) => {
 	if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
 
 	return res.sendFile(filePath);
-});
-
-// Multer error handling (e.g., file too large)
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-	if (err instanceof multer.MulterError) {
-		if (err.code === 'LIMIT_FILE_SIZE') {
-			return res.status(413).json({ error: 'File too large. Max 500MB.' });
-		}
-		return res.status(400).json({ error: err.message });
-	}
-	return next(err);
 });
 
 // Fallback error handler
