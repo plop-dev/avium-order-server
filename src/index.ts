@@ -12,6 +12,10 @@ import fs from 'fs';
 import crypto from 'crypto';
 import type { UploadChunk } from './types.js';
 
+// Configuration constants
+export const DELETE_AFTER_SLICE_FAILURE = false;
+export const DEBUG_LOGGING = false;
+
 dotenv.config();
 
 const app = express();
@@ -22,6 +26,8 @@ const __dirname = dirname(__filename);
 
 const uploadDir = process.env.UPLOAD_DIR || path.resolve(process.cwd(), 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
+
+console.log(`Upload directory: ${uploadDir}`); // Add logging to verify path
 
 // keep track of upload sessions
 const uploadSessions = new Map<

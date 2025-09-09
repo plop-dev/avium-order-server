@@ -7,6 +7,7 @@ import path from 'path';
 import crypto from 'crypto';
 import type { UploadChunk } from '../types.js';
 import express from 'express';
+import { DELETE_AFTER_SLICE_FAILURE } from '../index.ts';
 
 const router: Router = Router();
 
@@ -85,8 +86,6 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 	const chunk: UploadChunk = req.body;
 	if (!chunk) return res.status(400).json({ error: 'No chunk data' });
 
-	console.log(`Received slice chunk ${chunk.currentChunk}/${chunk.totalChunks} for ID ${chunk.id}`);
-
 	if (!chunk.id || chunk.currentChunk < 0 || chunk.totalChunks <= 0) {
 		return res.status(400).json({ error: 'Invalid chunk data' });
 	}
@@ -115,10 +114,10 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 
 	// Check if all chunks received
 	if (session.chunks.size === session.totalChunks) {
-		console.log(`All slice chunks received for ID ${chunk.id}, processing...`);
-
 		// Assemble file and slice
 		(async () => {
+			let workdir: string | undefined;
+			let modelFilePath: string | undefined;
 			try {
 				const completeFile = Buffer.concat(
 					Array.from(session.chunks.entries())
@@ -127,35 +126,46 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 				);
 				const filename = `upload.${chunk.filetype.toLowerCase()}`;
 
+				// Ensure uploads directory exists
+				await fs.mkdir(uploadDir, { recursive: true });
+
+				// Always save the uploaded model file first
+				const modelFilename = `${chunk.id}-model.${chunk.filetype.toLowerCase()}`;
+				modelFilePath = path.join(uploadDir, modelFilename);
+
+				await fs.writeFile(modelFilePath, completeFile);
+
+				const modelStats = await fs.stat(modelFilePath);
+				const modelUrl = makeSignedUrl(modelFilename);
+
+				// Now attempt slicing
 				const settings = session.settings || {};
-				const { gcodes, workdir } = await sliceModel(completeFile, filename, settings);
+
+				// Pass the quote ID to sliceModel so it can use the file directly from uploads
+				const { gcodes, workdir: sliceWorkdir } = await sliceModel(completeFile, filename, settings, chunk.id);
+				workdir = sliceWorkdir;
 
 				// Only handle single file case since spec says only one file at a time
 				if (gcodes.length !== 1 || typeof gcodes[0] !== 'string') {
-					sliceUploadSessions.delete(chunk.id);
-					await fs.rm(workdir, { recursive: true, force: true });
 					throw new AppError(500, 'Expected exactly one output file from slicing');
 				}
 
 				const { times, filament } = await extractSliceData(gcodes[0]);
 
-				// Save both model file and G-code file to uploads directory
-				const modelFilename = `${chunk.id}-model.${chunk.filetype.toLowerCase()}`;
-				const modelFilePath = path.join(uploadDir, modelFilename);
-				await fs.writeFile(modelFilePath, completeFile);
-
+				// Save G-code file to uploads directory
 				const gcodeOriginalFilename = path.basename(gcodes[0]);
 				const gcodeFilename = `${chunk.id}-gcode-${gcodeOriginalFilename}`;
 				const gcodeFilePath = path.join(uploadDir, gcodeFilename);
+
 				await fs.copyFile(gcodes[0], gcodeFilePath);
 
-				const modelStats = await fs.stat(modelFilePath);
 				const gcodeStats = await fs.stat(gcodeFilePath);
-				const modelUrl = makeSignedUrl(modelFilename);
 				const gcodeUrl = makeSignedUrl(gcodeFilename);
 
-				// Clean up
-				await fs.rm(workdir, { recursive: true, force: true });
+				// Clean up temp directory
+				if (workdir) {
+					await fs.rm(workdir, { recursive: true, force: true });
+				}
 				sliceUploadSessions.delete(chunk.id);
 
 				res.json({
@@ -171,9 +181,43 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 					filament,
 				});
 			} catch (error) {
+				// Clean up everything on failure
 				sliceUploadSessions.delete(chunk.id);
+
+				if (workdir) {
+					await fs.rm(workdir, { recursive: true, force: true }).catch(err => console.warn('Failed to cleanup workdir:', err));
+				}
+
+				if (DELETE_AFTER_SLICE_FAILURE) {
+					// Delete uploaded model file if it exists
+					if (modelFilePath) {
+						await fs.unlink(modelFilePath).catch(err => console.warn('Failed to delete model file:', err));
+					}
+
+					// Only delete profile files if they were specifically created for this request
+					const settings = session.settings;
+					if (settings) {
+						const basePath = process.env.DATA_PATH || path.join(process.cwd(), 'data');
+
+						// Only delete preset if it looks like a generated/temporary one (contains the chunk ID)
+						if (settings.preset && settings.preset.includes(chunk.id.replace(/-/g, ''))) {
+							const presetPath = path.join(basePath, 'presets', `${settings.preset}.json`);
+							await fs.unlink(presetPath).catch(err => console.warn(`Failed to delete preset ${settings.preset}:`, err));
+						}
+
+						// Only delete filament if it looks like a generated/temporary one (contains the chunk ID)
+						if (settings.filament && settings.filament.includes(chunk.id.replace(/-/g, ''))) {
+							const filamentPath = path.join(basePath, 'filaments', `${settings.filament}.json`);
+							await fs.unlink(filamentPath).catch(err => console.warn(`Failed to delete filament ${settings.filament}:`, err));
+						}
+					}
+				}
+
 				console.error('Error during chunked slice processing:', error);
-				res.status(500).json({ error: 'Failed to process and slice file' });
+				res.status(500).json({
+					error: 'Failed to process and slice file',
+					details: error instanceof Error ? error.message : String(error),
+				});
 			}
 		})();
 	} else {
