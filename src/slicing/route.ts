@@ -166,7 +166,6 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 				if (workdir) {
 					await fs.rm(workdir, { recursive: true, force: true });
 				}
-				sliceUploadSessions.delete(chunk.id);
 
 				res.json({
 					id: chunk.id,
