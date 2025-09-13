@@ -26,59 +26,67 @@ const sliceUploadSessions = new Map<
 
 const makeSignedUrl = (filename: string) => {
 	const secret = process.env.DOWNLOAD_SECRET;
-	if (!secret) throw new Error('DOWNLOAD_SECRET is required');
+	if (!secret) {
+		console.error('DOWNLOAD_SECRET is required for signed URLs');
+		return null;
+	}
 	const sig = crypto.createHmac('sha256', secret).update(filename).digest('hex');
 	const base = process.env.ENV === 'development' ? `http://localhost:${process.env.PORT || 3000}` : process.env.PUBLIC_BASE_URL;
 	return `${base}/file/${encodeURIComponent(filename)}?s=${sig}`;
 };
 
 async function extractSliceData(filePath: string) {
-	const fileLines = (await fs.readFile(filePath, 'utf-8')).split('\n');
-	const header = fileLines.slice(fileLines.indexOf('; HEADER_BLOCK_START'), fileLines.indexOf('; HEADER_BLOCK_END') + 1);
-	const filamentInfo = fileLines.slice(fileLines.indexOf('; EXECUTABLE_BLOCK_END'), fileLines.length - 1);
+	try {
+		const fileLines = (await fs.readFile(filePath, 'utf-8')).split('\n');
+		const header = fileLines.slice(fileLines.indexOf('; HEADER_BLOCK_START'), fileLines.indexOf('; HEADER_BLOCK_END') + 1);
+		const filamentInfo = fileLines.slice(fileLines.indexOf('; EXECUTABLE_BLOCK_END'), fileLines.length - 1);
 
-	const timeLine = header.find(line => /^; model printing time: .+; total estimated time: .+$/.test(line));
-	let modelTime: string = '',
-		totalTime: string = '';
-	if (timeLine) {
-		const [, model, total] = timeLine.match(/^; model printing time: (.+); total estimated time: (.+)$/) || [];
-		if (!model || !total) {
-			throw new AppError(500, 'Failed to parse slicing times from G-code');
-		}
-		modelTime = model;
-		totalTime = total;
-	}
-	if (!modelTime || !totalTime) {
-		throw new AppError(500, 'Failed to parse slicing times from G-code');
-	}
-	const times = { model: modelTime, total: totalTime };
-
-	type FilamentInfo = {
-		used_mm?: string;
-		used_cm3?: string;
-		used_g?: string;
-		cost?: string;
-	};
-
-	const keyMap: Record<string, keyof FilamentInfo> = {
-		'used [mm]': 'used_mm',
-		'used [cm3]': 'used_cm3',
-		'used [g]': 'used_g',
-		cost: 'cost',
-	};
-
-	const filament: FilamentInfo = {};
-	filamentInfo.forEach(line => {
-		const match = line.match(/^; filament (used \[mm\]|used \[cm3\]|used \[g\]|cost) = (.+)$/);
-		if (match && match[1] && match[2]) {
-			const mappedKey = keyMap[match[1]];
-			if (mappedKey) {
-				filament[mappedKey] = match[2];
+		const timeLine = header.find(line => /^; model printing time: .+; total estimated time: .+$/.test(line));
+		let modelTime: string = '',
+			totalTime: string = '';
+		if (timeLine) {
+			const [, model, total] = timeLine.match(/^; model printing time: (.+); total estimated time: (.+)$/) || [];
+			if (!model || !total) {
+				return { error: 'Failed to parse slicing times from G-code' };
 			}
+			modelTime = model;
+			totalTime = total;
 		}
-	});
+		if (!modelTime || !totalTime) {
+			return { error: 'Failed to parse slicing times from G-code' };
+		}
+		const times = { model: modelTime, total: totalTime };
 
-	return { times, filament };
+		type FilamentInfo = {
+			used_mm?: string;
+			used_cm3?: string;
+			used_g?: string;
+			cost?: string;
+		};
+
+		const keyMap: Record<string, keyof FilamentInfo> = {
+			'used [mm]': 'used_mm',
+			'used [cm3]': 'used_cm3',
+			'used [g]': 'used_g',
+			cost: 'cost',
+		};
+
+		const filament: FilamentInfo = {};
+		filamentInfo.forEach(line => {
+			const match = line.match(/^; filament (used \[mm\]|used \[cm3\]|used \[g\]|cost) = (.+)$/);
+			if (match && match[1] && match[2]) {
+				const mappedKey = keyMap[match[1]];
+				if (mappedKey) {
+					filament[mappedKey] = match[2];
+				}
+			}
+		});
+
+		return { times, filament };
+	} catch (error) {
+		console.error('Error extracting slice data:', error);
+		return { error: 'Failed to extract slice data from G-code' };
+	}
 }
 
 // Single chunked upload and slice route
@@ -137,20 +145,37 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 
 				const modelStats = await fs.stat(modelFilePath);
 				const modelUrl = makeSignedUrl(modelFilename);
+				if (!modelUrl) {
+					sliceUploadSessions.delete(chunk.id);
+					return res.status(500).json({ error: 'Failed to generate download URL' });
+				}
 
 				// Now attempt slicing
 				const settings = session.settings || {};
 
 				// Pass the quote ID to sliceModel so it can use the file directly from uploads
-				const { gcodes, workdir: sliceWorkdir } = await sliceModel(completeFile, filename, settings, chunk.id);
-				workdir = sliceWorkdir;
+				const sliceRes = await sliceModel(completeFile, filename, settings, chunk.id);
+				if (!sliceRes.success) {
+					sliceUploadSessions.delete(chunk.id);
+					return res.status(sliceRes.status).json({
+						error: sliceRes.message,
+						details: sliceRes.causeMessage,
+					});
+				}
+				const { gcodes, workdir } = sliceRes;
 
 				// Only handle single file case since spec says only one file at a time
 				if (gcodes.length !== 1 || typeof gcodes[0] !== 'string') {
-					throw new AppError(500, 'Expected exactly one output file from slicing');
+					sliceUploadSessions.delete(chunk.id);
+					return res.status(500).json({ error: 'Expected exactly one output file from slicing' });
 				}
 
-				const { times, filament } = await extractSliceData(gcodes[0]);
+				const sliceData = await extractSliceData(gcodes[0]);
+				if ('error' in sliceData) {
+					sliceUploadSessions.delete(chunk.id);
+					return res.status(500).json({ error: sliceData.error });
+				}
+				const { times, filament } = sliceData;
 
 				// Save G-code file to uploads directory
 				const gcodeOriginalFilename = path.basename(gcodes[0]);
@@ -161,11 +186,17 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 
 				const gcodeStats = await fs.stat(gcodeFilePath);
 				const gcodeUrl = makeSignedUrl(gcodeFilename);
+				if (!gcodeUrl) {
+					sliceUploadSessions.delete(chunk.id);
+					return res.status(500).json({ error: 'Failed to generate G-code download URL' });
+				}
 
 				// Clean up temp directory
 				if (workdir) {
 					await fs.rm(workdir, { recursive: true, force: true });
 				}
+
+				sliceUploadSessions.delete(chunk.id);
 
 				res.json({
 					id: chunk.id,

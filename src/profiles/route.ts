@@ -2,68 +2,108 @@ import { Router } from 'express';
 import { uploadJson } from '../middleware/upload.js';
 import type { Category } from '../slicing/models.ts';
 import { saveSetting, listSettings, getSetting, deleteSetting } from './settings.service.js';
-import { AppError } from '../middleware/error.js';
 
 const router: Router = Router();
 
 router.post('/:category', uploadJson.single('file'), async (req, res) => {
-	const name = req.body.name;
+	try {
+		const name = req.body.name;
 
-	validateNameNotEmpty(name);
-	if (!/^[a-zA-Z0-9]+$/.test(name)) {
-		throw new AppError(400, 'Name must only contain letters and numbers');
+		if (!validateNameNotEmpty(name)) {
+			return res.status(400).json({ error: 'Name cannot be empty' });
+		}
+
+		if (!/^[a-zA-Z0-9]+$/.test(name)) {
+			return res.status(400).json({ error: 'Name must only contain letters and numbers' });
+		}
+
+		if (!req.file) {
+			return res.status(400).json({ error: 'File is required' });
+		}
+
+		if (!validateCategory(req.params.category ?? '')) {
+			return res.status(400).json({ error: 'Invalid or missing category' });
+		}
+
+		let content;
+		try {
+			content = JSON.parse(req.file.buffer.toString('utf8'));
+		} catch (parseError) {
+			return res.status(400).json({ error: 'Invalid JSON file' });
+		}
+
+		await saveSetting(req.params.category as Category, name, content);
+
+		res.status(201).json({ name });
+	} catch (error) {
+		console.error('Error in POST /:category:', error);
+		res.status(500).json({ error: 'Internal server error' });
 	}
-
-	if (!req.file) {
-		throw new AppError(400, 'File is required');
-	}
-	validateCategory(req.params.category ?? '');
-
-	const content = JSON.parse(req.file.buffer.toString('utf8'));
-
-	await saveSetting(req.params.category as Category, name, content);
-
-	res.status(201).json({ name });
 });
 
 router.get('/:category', async (req, res) => {
-	validateCategory(req.params.category ?? '');
+	try {
+		if (!validateCategory(req.params.category ?? '')) {
+			return res.status(400).json({ error: 'Invalid or missing category' });
+		}
 
-	const settings = await listSettings(req.params.category as Category);
+		const settings = await listSettings(req.params.category as Category);
 
-	res.status(200).json(settings);
+		res.status(200).json(settings);
+	} catch (error) {
+		console.error('Error in GET /:category:', error);
+		res.status(500).json({ error: 'Internal server error' });
+	}
 });
 
 router.get('/:category/:name', async (req, res) => {
-	validateCategory(req.params.category ?? '');
+	try {
+		if (!validateCategory(req.params.category ?? '')) {
+			return res.status(400).json({ error: 'Invalid or missing category' });
+		}
 
-	validateNameNotEmpty(req.params.name);
+		if (!validateNameNotEmpty(req.params.name)) {
+			return res.status(400).json({ error: 'Name cannot be empty' });
+		}
 
-	const setting = await getSetting(req.params.category as Category, req.params.name);
+		const setting = await getSetting(req.params.category as Category, req.params.name);
 
-	res.status(200).json(setting);
+		res.status(200).json(setting);
+	} catch (error) {
+		console.error('Error in GET /:category/:name:', error);
+		res.status(500).json({ error: 'Internal server error' });
+	}
 });
 
 router.delete('/:category/:name', async (req, res) => {
-	validateCategory(req.params.category ?? '');
-	validateNameNotEmpty(req.params.name);
+	try {
+		if (!validateCategory(req.params.category ?? '')) {
+			return res.status(400).json({ error: 'Invalid or missing category' });
+		}
 
-	await deleteSetting(req.params.category as Category, req.params.name);
+		if (!validateNameNotEmpty(req.params.name)) {
+			return res.status(400).json({ error: 'Name cannot be empty' });
+		}
 
-	res.status(204).send();
+		await deleteSetting(req.params.category as Category, req.params.name);
+
+		res.status(204).send();
+	} catch (error) {
+		console.error('Error in DELETE /:category/:name:', error);
+		res.status(500).json({ error: 'Internal server error' });
+	}
 });
 
-function validateNameNotEmpty(name: string) {
-	if (!name || typeof name !== 'string' || name.trim().length === 0) {
-		throw new AppError(400, 'Name cannot be empty');
-	}
+function validateNameNotEmpty(name: string): boolean {
+	return !(!name || typeof name !== 'string' || name.trim().length === 0);
 }
 
-export function validateCategory(category: string) {
+export function validateCategory(category: string): boolean {
 	if (!category || !['printers', 'presets', 'filaments'].includes(category)) {
 		console.debug(`[validateCategory] Validation failed - invalid category: ${category}`);
-		throw new AppError(400, 'Invalid or missing category');
+		return false;
 	}
+	return true;
 }
 
 export default router;

@@ -148,30 +148,47 @@ app.get('/', (req, res) => {
 
 // Protected file download (signed, permanent)
 app.get('/file/:filename', (req, res) => {
-	const filename = req.params.filename;
-	const s = req.query.s as string | undefined;
+	try {
+		const filename = req.params.filename;
+		const s = req.query.s as string | undefined;
 
-	const secret = process.env.DOWNLOAD_SECRET;
-	if (!secret || !filename || !s) return res.status(400).json({ error: 'Invalid link' });
+		const secret = process.env.DOWNLOAD_SECRET;
+		if (!secret || !filename || !s) {
+			return res.status(400).json({ error: 'Invalid link' });
+		}
 
-	const expected = crypto.createHmac('sha256', secret).update(filename).digest('hex');
-	// Constant-time compare
-	if (s.length !== expected.length) return res.status(403).json({ error: 'Invalid signature' });
-	const valid = crypto.timingSafeEqual(Buffer.from(s, 'utf8'), Buffer.from(expected, 'utf8'));
-	if (!valid) return res.status(403).json({ error: 'Invalid signature' });
+		const expected = crypto.createHmac('sha256', secret).update(filename).digest('hex');
+		// Constant-time compare
+		if (s.length !== expected.length) {
+			return res.status(403).json({ error: 'Invalid signature' });
+		}
+		const valid = crypto.timingSafeEqual(Buffer.from(s, 'utf8'), Buffer.from(expected, 'utf8'));
+		if (!valid) {
+			return res.status(403).json({ error: 'Invalid signature' });
+		}
 
-	// Prevent path traversal
-	const filePath = path.resolve(uploadDir, filename);
-	if (!filePath.startsWith(uploadDir)) return res.status(400).json({ error: 'Invalid path' });
-	if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+		// Prevent path traversal
+		const filePath = path.resolve(uploadDir, filename);
+		if (!filePath.startsWith(uploadDir)) {
+			return res.status(400).json({ error: 'Invalid path' });
+		}
+		if (!fs.existsSync(filePath)) {
+			return res.status(404).json({ error: 'Not found' });
+		}
 
-	return res.sendFile(filePath);
+		return res.sendFile(filePath);
+	} catch (error) {
+		console.error('Error in file download:', error);
+		res.status(500).json({ error: 'Internal server error' });
+	}
 });
 
 // Fallback error handler
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-	console.error(err);
-	res.status(500).json({ error: 'Internal server error' });
+	console.error(`[${new Date().toISOString()}] Unhandled error:`, err);
+	if (!res.headersSent) {
+		res.status(500).json({ error: 'Internal server error' });
+	}
 });
 
 app.listen(PORT, () => {

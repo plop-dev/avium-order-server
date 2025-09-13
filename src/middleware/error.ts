@@ -20,6 +20,6 @@ export function errorHandler(err: AppError, req: Request, res: Response, next: N
 	);
 
 	res.status(err.status).json({
-		message: err.message,
+		message: err.causeMessage || err.message,
 	});
 }
