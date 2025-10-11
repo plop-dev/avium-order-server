@@ -196,7 +196,7 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 					await fs.rm(workdir, { recursive: true, force: true });
 				}
 
-				sliceUploadSessions.delete(chunk.id);
+				// sliceUploadSessions.delete(chunk.id);
 
 				res.json({
 					id: chunk.id,
@@ -276,12 +276,33 @@ router.delete('/:id', async (req, res) => {
 
 	// Clean up any files that match this ID pattern
 	try {
+		// Check if upload directory exists before trying to read it
+		await fs.access(uploadDir);
 		const files = await fs.readdir(uploadDir);
 		const filesToDelete = files.filter(file => file.startsWith(`${id}-`));
 
-		await Promise.all(filesToDelete.map(file => fs.unlink(path.join(uploadDir, file)).catch(err => console.warn(`Failed to delete file ${file}:`, err))));
+		if (filesToDelete.length > 0) {
+			console.log(`Deleting ${filesToDelete.length} files for upload ID: ${id}`);
+			await Promise.all(
+				filesToDelete.map(async file => {
+					const filePath = path.join(uploadDir, file);
+					try {
+						await fs.unlink(filePath);
+						console.log(`Deleted file: ${file}`);
+					} catch (err) {
+						console.warn(`Failed to delete file ${file}:`, err);
+					}
+				}),
+			);
+		} else {
+			console.log(`No files found to delete for upload ID: ${id}`);
+		}
 	} catch (error) {
-		console.warn('Failed to clean up files:', error);
+		if ((error as any).code === 'ENOENT') {
+			console.warn('Upload directory does not exist, skipping file cleanup');
+		} else {
+			console.warn('Failed to clean up files:', error);
+		}
 	}
 
 	res.status(204).send();

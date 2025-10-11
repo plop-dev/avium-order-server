@@ -29,17 +29,6 @@ fs.mkdirSync(uploadDir, { recursive: true });
 
 console.log(`Upload directory: ${uploadDir}`); // Add logging to verify path
 
-// keep track of upload sessions
-const uploadSessions = new Map<
-	string,
-	{
-		chunks: Map<number, Buffer>;
-		totalChunks: number;
-		filetype: string;
-		originalName?: string;
-	}
->();
-
 app.use(
 	cors({
 		origin: process.env.ENV === 'development' ? `http://localhost:3000` : process.env.PUBLIC_FRONTEND_URL,
