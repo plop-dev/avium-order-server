@@ -50,6 +50,7 @@ export async function sliceModel(
 	}
 
 	const basePath = process.env.DATA_PATH || path.join(process.cwd(), 'data');
+	// for uploaded profiles
 
 	const args: string[] = [];
 
@@ -69,8 +70,11 @@ export async function sliceModel(
 	}
 
 	if (settings.printer && settings.preset) {
-		const uploadedPresetPath = `${basePath}/presets/${settings.preset}.json`;
-		const defaultPresetPath = `${process.env.PROCESS_PROFILES_FOLDER}/${settings.preset}.json`;
+		const uploadedPresetPath = `${basePath}/presets/${settings.preset}.json`; // user uploaded
+		const defaultPresetPath = `${process.env.ORCASLICER_PROFILES}/profiles/${process.env.PRINTER_NAME}/process/${settings.preset}.json`; // from OrcaSlicer install
+
+		console.log('uploadedPresetPath', uploadedPresetPath);
+		console.log('defaultPresetPath', defaultPresetPath);
 
 		let presetPath: string;
 		try {

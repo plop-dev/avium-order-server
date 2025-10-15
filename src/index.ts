@@ -27,7 +27,7 @@ const __dirname = dirname(__filename);
 const uploadDir = process.env.UPLOAD_DIR || path.resolve(process.cwd(), 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
-console.log(`Upload directory: ${uploadDir}`); // Add logging to verify path
+if (DEBUG_LOGGING) console.log(`Upload directory: ${uploadDir}`); // Add logging to verify path
 
 app.use(
 	cors({
