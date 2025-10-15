@@ -73,8 +73,10 @@ export async function sliceModel(
 		const uploadedPresetPath = `${basePath}/presets/${settings.preset}.json`; // user uploaded
 		const defaultPresetPath = `${process.env.ORCASLICER_PROFILES}/profiles/${process.env.PRINTER_NAME}/process/${settings.preset}.json`; // from OrcaSlicer install
 
-		console.log('uploadedPresetPath', uploadedPresetPath);
-		console.log('defaultPresetPath', defaultPresetPath);
+		if (DEBUG_LOGGING) {
+			console.log('uploadedPresetPath', uploadedPresetPath)
+			console.log('defaultPresetPath', defaultPresetPath)
+		}
 
 		let presetPath: string;
 		try {

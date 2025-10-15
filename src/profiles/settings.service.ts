@@ -3,6 +3,7 @@ import { join } from 'path';
 import type { Category } from '../slicing/models.ts';
 import { AppError } from '../middleware/error.js';
 import path from 'path';
+import { DEBUG_LOGGING } from '../index.ts';
 
 const BASE = process.env.DATA_PATH || join(process.cwd(), 'data');
 
@@ -67,7 +68,7 @@ export async function deleteSetting(category: Category, name: string): Promise<v
 	try {
 		await fs.access(filePath);
 		await fs.unlink(filePath);
-		console.debug(`[deleteSetting] Successfully deleted ${category}/${name}`);
+		if (DEBUG_LOGGING) console.debug(`[deleteSetting] Successfully deleted ${category}/${name}`);
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
 			throw new AppError(404, `${category.slice(0, -1)} profile '${name}' not found`);
