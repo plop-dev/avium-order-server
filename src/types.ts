@@ -38,3 +38,10 @@ export type SlicingResult = {
 	};
 	filament: FilamentInfo;
 };
+
+export interface PricingFormula {
+	id: string;
+	pricingFormula: string;
+	updatedAt?: string | null;
+	createdAt?: string | null;
+}

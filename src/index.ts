@@ -6,6 +6,7 @@ import path, { dirname } from 'path';
 import profiles from './profiles/route.ts';
 import slicing from './slicing/route.ts';
 import generate from './generate/route.ts';
+import cookieParser from 'cookie-parser';
 
 import multer from 'multer';
 import fs from 'fs';
@@ -33,9 +34,11 @@ app.use(
 	cors({
 		origin: process.env.ENV === 'development' ? `http://localhost:3000` : process.env.PUBLIC_FRONTEND_URL,
 		methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+		credentials: true,
 	}),
 );
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 
 app.use('/profiles', profiles);
 app.use('/slice', slicing);

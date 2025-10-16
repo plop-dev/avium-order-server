@@ -5,9 +5,10 @@ import { sliceModel } from './slicing.service.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
-import type { UploadChunk } from '../types.js';
+import type { PricingFormula, UploadChunk } from '../types.js';
 import express from 'express';
 import { DELETE_AFTER_SLICE_FAILURE } from '../index.ts';
+import { evaluate } from 'mathjs';
 
 const router: Router = Router();
 
@@ -34,6 +35,23 @@ const makeSignedUrl = (filename: string) => {
 	const base = process.env.ENV === 'development' ? `http://localhost:${process.env.PORT || 3000}` : process.env.PUBLIC_BASE_URL;
 	return `${base}/file/${encodeURIComponent(filename)}?s=${sig}`;
 };
+
+export function timeStringToSeconds(timeStr: string): number {
+	const timeParts = timeStr.split(' ');
+	let totalSeconds = 0;
+
+	for (const part of timeParts) {
+		if (part.endsWith('h')) {
+			totalSeconds += parseInt(part.slice(0, -1)) * 3600;
+		} else if (part.endsWith('m')) {
+			totalSeconds += parseInt(part.slice(0, -1)) * 60;
+		} else if (part.endsWith('s')) {
+			totalSeconds += parseInt(part.slice(0, -1));
+		}
+	}
+
+	return totalSeconds;
+}
 
 async function extractSliceData(filePath: string) {
 	try {
@@ -115,6 +133,8 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 	}
 
 	const session = sliceUploadSessions.get(chunk.id)!;
+
+	const payloadcmsUrl = process.env.ENV === 'development' ? 'http://localhost:3000' : process.env.PUBLIC_FRONTEND_URL;
 
 	// Store chunk data
 	const chunkBuffer = Buffer.from(chunk.data, 'base64');
@@ -198,6 +218,55 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 
 				// sliceUploadSessions.delete(chunk.id);
 
+				//* upload to payloadcms from here
+				const pricingFormulaRes = await fetch(`${payloadcmsUrl}/api/globals/pricing-formula`, {
+					headers: {
+						Cookie: req.headers.cookie || '',
+					},
+					credentials: 'include',
+				});
+				if (!pricingFormulaRes.ok) {
+					res.status(500).json({ error: 'An error occurred fetching pricing formula. Please try again.' });
+					return;
+				}
+				const pricingFormula = await pricingFormulaRes.json().then((res: PricingFormula) => res.pricingFormula);
+
+				if (!pricingFormula) {
+					res.status(500).json({ error: 'An error occurred fetching pricing formula. Please try again.' });
+					return;
+				}
+
+				const cost = Number(filament.cost) || 0;
+				console.log(`formula: ${pricingFormula}, weight: ${filament.used_g}g, time: ${timeStringToSeconds(times.total)}, cost: £${cost}`);
+				const price = (
+					evaluate(pricingFormula, {
+						weight: filament.used_g,
+						time: timeStringToSeconds(times.total),
+						cost: cost,
+					}) / 100
+				).toFixed(2) as unknown as number;
+
+				const patchReq = await fetch(`${payloadcmsUrl}/api/quotes/${chunk.id}`, {
+					method: 'PATCH',
+					credentials: 'include',
+					headers: {
+						'Content-Type': 'application/json',
+						Cookie: req.headers.cookie || '',
+					},
+					body: JSON.stringify({
+						price,
+						model: {
+							modelUrl: modelUrl,
+							gcodeUrl: gcodeUrl,
+						},
+						time: times.total,
+					}),
+				});
+				if (!patchReq.ok) {
+					res.status(500).json({ error: `Error updating quote: ${patchReq.statusText}` });
+					return;
+				}
+
 				res.json({
 					id: chunk.id,
 					modelFilename,
@@ -209,6 +278,7 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 					complete: true,
 					times,
 					filament,
+					price,
 				});
 			} catch (error) {
 				// Clean up everything on failure
