@@ -7,7 +7,7 @@ import path from 'path';
 import crypto from 'crypto';
 import type { PricingFormula, UploadChunk } from '../types.js';
 import express from 'express';
-import { DELETE_AFTER_SLICE_FAILURE } from '../index.ts';
+import { DEBUG_LOGGING, DELETE_AFTER_SLICE_FAILURE } from '../index.ts';
 import { evaluate } from 'mathjs';
 
 const router: Router = Router();
@@ -237,7 +237,7 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 				}
 
 				const cost = Number(filament.cost) || 0;
-				console.log(`formula: ${pricingFormula}, weight: ${filament.used_g}g, time: ${timeStringToSeconds(times.total)}, cost: £${cost}`);
+				// console.log(`formula: ${pricingFormula}, weight: ${filament.used_g}g, time: ${timeStringToSeconds(times.total)}, cost: £${cost}`);
 				const price = (
 					evaluate(pricingFormula, {
 						weight: filament.used_g,
@@ -358,7 +358,8 @@ router.delete('/:id', async (req, res) => {
 					const filePath = path.join(uploadDir, file);
 					try {
 						await fs.unlink(filePath);
-						console.log(`Deleted file: ${file}`);
+
+						if (DEBUG_LOGGING) console.log(`Deleted file: ${file}`);
 					} catch (err) {
 						console.warn(`Failed to delete file ${file}:`, err);
 					}
