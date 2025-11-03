@@ -53,6 +53,13 @@ export async function sliceModel(
 	// for uploaded profiles
 
 	const args: string[] = [];
+	let cmd = process.env.ORCASLICER_BIN_PATH || 'OrcaSlicer';
+
+	if (process.env.ORCASLICER_BIN_PATH?.includes(' ')) {
+		const parts = process.env.ORCASLICER_BIN_PATH.split(' ');
+		cmd = parts[0] || process.env.ORCASLICER_BIN_PATH;
+		args.push(...parts.slice(1));
+	}
 
 	if (settings.exportType === '3mf') {
 		args.push('--export-3mf', 'result.3mf');
@@ -74,8 +81,8 @@ export async function sliceModel(
 		const defaultPresetPath = `${process.env.ORCASLICER_PROFILES}/profiles/${process.env.PRINTER_NAME}/process/${settings.preset}.json`; // from OrcaSlicer install
 
 		if (DEBUG_LOGGING) {
-			console.log('uploadedPresetPath', uploadedPresetPath)
-			console.log('defaultPresetPath', defaultPresetPath)
+			console.log('uploadedPresetPath', uploadedPresetPath);
+			console.log('defaultPresetPath', defaultPresetPath);
 		}
 
 		let presetPath: string;
@@ -128,9 +135,9 @@ export async function sliceModel(
 	args.push('--outputdir', outputDir);
 	args.push(inPath);
 
-	if (!process.env.ORCASLICER_PATH) {
+	if (!process.env.ORCASLICER_BIN_PATH) {
 		return {
-			...new AppError(500, 'Slicing is not configured properly on the server', 'ORCASLICER_PATH environment variable is not defined'),
+			...new AppError(500, 'Slicing is not configured properly on the server', 'ORCASLICER_BIN_PATH environment variable is not defined'),
 			success: false,
 		};
 	}
@@ -138,7 +145,7 @@ export async function sliceModel(
 	if (DEBUG_LOGGING) console.log(`Executing OrcaSlicer with args:`, args);
 
 	try {
-		const result = execFileSync(process.env.ORCASLICER_PATH, args, {
+		const result = execFileSync(cmd, args, {
 			encoding: 'utf-8',
 			stdio: ['ignore', 'pipe', 'pipe'],
 			timeout: 300000, // 5 minute timeout

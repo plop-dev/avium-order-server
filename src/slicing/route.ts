@@ -218,7 +218,6 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 
 				// sliceUploadSessions.delete(chunk.id);
 
-				//* upload to payloadcms from here
 				const pricingFormulaRes = await fetch(`${payloadcmsUrl}/api/globals/pricing-formula`, {
 					headers: {
 						Cookie: req.headers.cookie || '',
