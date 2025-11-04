@@ -52,91 +52,9 @@ const makeSignedUrl = (filename: string) => {
 	return `${base}/file/${encodeURIComponent(filename)}?s=${sig}`;
 };
 
-// const storage = multer.diskStorage({
-// 	destination: (req, file, cb) => cb(null, uploadDir),
-// 	filename: (req, file, cb) => {
-// 		const ts = Date.now();
-// 		const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-// 		cb(null, `${ts}-${safe}`);
-// 	},
-// });
-// const uploader = multer({
-// 	storage,
-// 	limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
-// });
-
 app.get('/', (req, res) => {
 	res.sendStatus(200);
 });
-
-// app.post('/upload', express.json({ limit: '10mb' }), (req, res) => {
-// 	const chunk: UploadChunk = req.body;
-// 	if (!chunk) return res.status(400).json({ error: 'No chunk data' });
-
-// 	console.log(`Received chunk ${chunk.currentChunk}/${chunk.totalChunks} for ID ${chunk.id}`);
-
-// 	if (!chunk.id || chunk.currentChunk < 0 || chunk.totalChunks <= 0) {
-// 		return res.status(400).json({ error: 'Invalid chunk data' });
-// 	}
-
-// 	// Initialize session if first chunk
-// 	if (!uploadSessions.has(chunk.id)) {
-// 		uploadSessions.set(chunk.id, {
-// 			chunks: new Map(),
-// 			totalChunks: chunk.totalChunks,
-// 			filetype: chunk.filetype,
-// 		});
-// 	}
-
-// 	const session = uploadSessions.get(chunk.id)!;
-
-// 	// Store chunk data
-// 	const chunkBuffer = Buffer.from(chunk.data, 'base64');
-// 	session.chunks.set(chunk.currentChunk, chunkBuffer);
-
-// 	// Check if all chunks received
-// 	if (session.chunks.size === session.totalChunks) {
-// 		console.log(`All chunks received for ID ${chunk.id}, assembling file...`);
-// 		console.log(
-// 			`Chunks: ${Array.from(session.chunks.keys())
-// 				.sort((a, b) => a - b)
-// 				.join(', ')}`,
-// 		);
-
-// 		try {
-// 			// Assemble file
-// 			const completeFile = Buffer.concat([...session.chunks.values()]);
-
-// 			// Save assembled file
-// 			const filename = `${Date.now()}-${chunk.id}.${chunk.filetype.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'}`;
-// 			const filePath = path.join(uploadDir, filename);
-// 			fs.writeFileSync(filePath, completeFile);
-
-// 			// Clean up session
-// 			uploadSessions.delete(chunk.id);
-
-// 			console.log(`File assembled and saved as ${filename}`);
-// 			return res.json({
-// 				id: chunk.id,
-// 				filename,
-// 				size: completeFile.length,
-// 				filetype: session.filetype,
-// 				url: makeSignedUrl(filename),
-// 				complete: true,
-// 			});
-// 		} catch (error) {
-// 			uploadSessions.delete(chunk.id);
-// 			console.error('Error assembling file:', error);
-// 			return res.status(500).json({ error: 'Failed to assemble file' });
-// 		}
-// 	}
-
-// 	res.json({
-// 		received: chunk.currentChunk + 1,
-// 		total: chunk.totalChunks,
-// 		complete: false,
-// 	});
-// });
 
 // Protected file download (signed, permanent)
 app.get('/file/:filename', (req, res) => {
@@ -171,6 +89,26 @@ app.get('/file/:filename', (req, res) => {
 		return res.sendFile(filePath);
 	} catch (error) {
 		console.error('Error in file download:', error);
+		res.status(500).json({ error: 'Internal server error' });
+	}
+});
+
+app.get('/products/:filename', (req, res) => {
+	try {
+		const filename = req.params.filename;
+		// Prevent path traversal
+		const productsDir = process.env.PRODUCTS_DIR || path.resolve(process.cwd(), 'products');
+		const filePath = path.resolve(productsDir, filename);
+		if (!filePath.startsWith(productsDir)) {
+			return res.status(400).json({ error: 'Invalid path' });
+		}
+		if (!fs.existsSync(filePath)) {
+			return res.status(404).json({ error: 'Not found' });
+		}
+
+		return res.sendFile(filePath);
+	} catch (error) {
+		console.error('Error in product file download:', error);
 		res.status(500).json({ error: 'Internal server error' });
 	}
 });
