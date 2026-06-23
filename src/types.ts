@@ -45,3 +45,11 @@ export interface PricingFormula {
 	updatedAt?: string | null;
 	createdAt?: string | null;
 }
+
+export type ServerData = {
+	isOnline: boolean;
+	lastHeartbeat?: string;
+	ramUsage?: number;
+	cpuUsage?: number;
+	error?: string;
+};

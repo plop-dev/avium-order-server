@@ -235,15 +235,20 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 					return;
 				}
 
+				const weight = Number.parseFloat(filament.used_g || '') || 0;
+				const time = timeStringToSeconds(times.total);
 				const cost = Number(filament.cost) || 0;
-				// console.log(`formula: ${pricingFormula}, weight: ${filament.used_g}g, time: ${timeStringToSeconds(times.total)}, cost: £${cost}`);
-				const price = (
-					evaluate(pricingFormula, {
-						weight: filament.used_g,
-						time: timeStringToSeconds(times.total),
-						cost: cost,
-					}) / 100
-				).toFixed(2) as unknown as number;
+				// console.log(`formula: ${pricingFormula}, weight: ${weight}g, time: ${time}, cost: £${cost}`);
+				const evaluatedPrice = evaluate(pricingFormula, {
+					weight,
+					time,
+					cost,
+				});
+				const numericPrice = Number(evaluatedPrice);
+				if (!Number.isFinite(numericPrice)) {
+					throw new Error('Pricing formula did not resolve to a finite number');
+				}
+				const price = (numericPrice / 100).toFixed(2) as unknown as number;
 
 				const patchReq = await fetch(`${payloadcmsUrl}/api/quotes/${chunk.id}`, {
 					method: 'PATCH',

@@ -1,3 +1,4 @@
+import os from 'node:os';
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -11,7 +12,7 @@ import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import fs from 'fs';
 import crypto from 'crypto';
-import type { UploadChunk } from './types.js';
+import type { ServerData, UploadChunk } from './types.js';
 
 // Configuration constants
 export const DELETE_AFTER_SLICE_FAILURE = false;
@@ -109,6 +110,46 @@ app.get('/products/:filename', (req, res) => {
 		return res.sendFile(filePath);
 	} catch (error) {
 		console.error('Error in product file download:', error);
+		res.status(500).json({ error: 'Internal server error' });
+	}
+});
+
+const formatToMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(2);
+
+function getMemoryUsage() {
+	const totalMemory = os.totalmem();
+	const freeMemory = os.freemem();
+	const usedMemory = totalMemory - freeMemory;
+	const usagePercentage = ((usedMemory / totalMemory) * 100).toFixed(2);
+
+	return usagePercentage;
+}
+
+function getCPUUsage() {
+	const cpus = os.cpus();
+	const cpuUsage = cpus.map(cpu => {
+		const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
+		const usage = ((total - cpu.times.idle) / total) * 100;
+		return usage.toFixed(2);
+	});
+
+	const totalUsage = cpuUsage.reduce((acc, usage) => acc + parseFloat(usage), 0) / cpuUsage.length;
+
+	return totalUsage.toFixed(2);
+}
+
+app.get('/health', (req, res) => {
+	try {
+		const data: ServerData = {
+			isOnline: true,
+			lastHeartbeat: new Date().toISOString(),
+			ramUsage: parseFloat(getMemoryUsage()),
+			cpuUsage: parseFloat(getCPUUsage()),
+		};
+
+		res.json(data);
+	} catch (error) {
+		console.error('Error in health check:', error);
 		res.status(500).json({ error: 'Internal server error' });
 	}
 });
