@@ -248,7 +248,7 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 				if (!Number.isFinite(numericPrice)) {
 					throw new Error('Pricing formula did not resolve to a finite number');
 				}
-				const price = (numericPrice / 100).toFixed(2) as unknown as number;
+				const price = (numericPrice / 100).toFixed(0) as unknown as number;
 
 				const patchReq = await fetch(`${payloadcmsUrl}/api/quotes/${chunk.id}`, {
 					method: 'PATCH',
@@ -256,6 +256,7 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 					headers: {
 						'Content-Type': 'application/json',
 						Cookie: req.headers.cookie || '',
+						'X-Internal-Token': process.env.AVIUM_BACKEND_PASSWORD || '',
 					},
 					body: JSON.stringify({
 						price,
