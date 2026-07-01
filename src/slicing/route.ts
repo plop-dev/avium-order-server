@@ -264,6 +264,7 @@ router.post('/', express.json({ limit: '10mb' }), (req, res) => {
 							modelUrl: modelUrl,
 							gcodeUrl: gcodeUrl,
 						},
+						filament: weight,
 						time: times.total,
 					}),
 				});
